@@ -50,7 +50,8 @@ def verify_quantization(model, quant_bits):
 
 def run_experiment(quant_bits: int, replay_ratio: float, task: str,
                    max_samples: int = None, epochs: int = 3,
-                   batch_size: int = 2, grad_accum: int = 8, seed: int = 42):
+                   batch_size: int = 2, grad_accum: int = 8, seed: int = 42,
+                   replay_source: str = "alpaca"):
     # ── Config ─────────────────────────────────────────────────────
     # Effective batch = batch_size * grad_accum = 16 (T4-safe defaults).
     MODEL_NAME = "unsloth/Llama-3.2-3B"  # full-precision base; quantize at load.
@@ -64,12 +65,15 @@ def run_experiment(quant_bits: int, replay_ratio: float, task: str,
     LR = 2e-4
 
     run_name = f"llama3b_{quant_bits}bit_replay{int(replay_ratio*100)}pct_{task}"
+    if replay_source != "alpaca":        # Phase 8 ablation: tag non-default replay source
+        run_name += f"_{replay_source}"  # so it never overwrites the Alpaca run of the same cell
     if seed != 42:                       # seed-repeat runs get a distinct name/folder
         run_name += f"_seed{seed}"       # so repeats don't overwrite the seed-42 run
     wandb.init(project="qlora-forgetting", name=run_name,
                config=dict(quant_bits=quant_bits, replay_ratio=replay_ratio,
                             task=task, lora_rank=LORA_RANK, epochs=epochs,
-                            max_samples=max_samples, seed=seed))
+                            max_samples=max_samples, seed=seed,
+                            replay_source=replay_source))
 
     # ── Load model at the requested quantization ───────────────────
     # One base model, quantized at load → bit-width is the only variable.
@@ -100,14 +104,19 @@ def run_experiment(quant_bits: int, replay_ratio: float, task: str,
     # ── Build dataset with replay ──────────────────────────────────
     with open(f"data/{task}_train.json") as f:
         task_data = json.load(f)
-    with open("data/alpaca_cleaned.json") as f:
-        alpaca_data = json.load(f)
+    # Phase 8 ablation: swap the replay buffer's SOURCE (Alpaca vs Dolly) while
+    # keeping build_replay_dataset's ratio logic identical, to test whether the
+    # flat ~20% optimum is set by the replay mixture rather than by bit-width.
+    replay_file = {"alpaca": "data/alpaca_cleaned.json",
+                   "dolly": "data/dolly_15k.json"}[replay_source]
+    with open(replay_file) as f:
+        replay_data = json.load(f)
 
     # Sanity-run knob: truncate the task set to a small slice.
     if max_samples is not None:
         task_data = task_data[:max_samples]
 
-    mixed_data = build_replay_dataset(task_data, alpaca_data, replay_ratio, seed=seed)
+    mixed_data = build_replay_dataset(task_data, replay_data, replay_ratio, seed=seed)
 
     # Split each example into PROMPT (what the model reads) and COMPLETION (what it
     # must learn to produce). The prompt ends exactly at "### Response:\n"; the answer
@@ -201,8 +210,11 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42,          # 42 = all prior runs
                         help="Random seed (data order, LoRA init, trainer). "
                              "Change it for seed-repeat / noise-estimate runs.")
+    parser.add_argument("--replay_source", type=str, default="alpaca",
+                        choices=["alpaca", "dolly"],
+                        help="Replay buffer source (Phase 8 ablation: alpaca vs dolly).")
     args = parser.parse_args()
     run_experiment(args.quant, args.replay, args.task,
                    max_samples=args.max_samples, epochs=args.epochs,
                    batch_size=args.batch_size, grad_accum=args.grad_accum,
-                   seed=args.seed)
+                   seed=args.seed, replay_source=args.replay_source)
