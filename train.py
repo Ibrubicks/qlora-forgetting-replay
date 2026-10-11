@@ -51,7 +51,7 @@ def verify_quantization(model, quant_bits):
 def run_experiment(quant_bits: int, replay_ratio: float, task: str,
                    max_samples: int = None, epochs: int = 3,
                    batch_size: int = 2, grad_accum: int = 8, seed: int = 42,
-                   replay_source: str = "alpaca"):
+                   replay_source: str = "alpaca", fixed_budget: bool = False):
     # ── Config ─────────────────────────────────────────────────────
     # Effective batch = batch_size * grad_accum = 16 (T4-safe defaults).
     MODEL_NAME = "unsloth/Llama-3.2-3B"  # full-precision base; quantize at load.
@@ -67,6 +67,8 @@ def run_experiment(quant_bits: int, replay_ratio: float, task: str,
     run_name = f"llama3b_{quant_bits}bit_replay{int(replay_ratio*100)}pct_{task}"
     if replay_source != "alpaca":        # Phase 8 ablation: tag non-default replay source
         run_name += f"_{replay_source}"  # so it never overwrites the Alpaca run of the same cell
+    if fixed_budget:                     # fixed-steps control: distinct name so it never overwrites the normal run
+        run_name += "_fixedsteps"
     if seed != 42:                       # seed-repeat runs get a distinct name/folder
         run_name += f"_seed{seed}"       # so repeats don't overwrite the seed-42 run
     wandb.init(project="qlora-forgetting", name=run_name,
@@ -118,6 +120,17 @@ def run_experiment(quant_bits: int, replay_ratio: float, task: str,
 
     mixed_data = build_replay_dataset(task_data, replay_data, replay_ratio, seed=seed)
 
+    # Fixed-steps control: cap total optimizer steps at what a 0%-replay run of this
+    # task would take, so replay ratio is the only thing that changes (not training
+    # exposure). max_steps=-1 leaves normal epoch-based training untouched.
+    max_steps = -1
+    if fixed_budget:
+        import math
+        batches_per_epoch = math.ceil(len(task_data) / batch_size)
+        max_steps = math.ceil(batches_per_epoch / grad_accum) * epochs
+        print(f"[Fixed budget] capping training at {max_steps} optimizer steps "
+              f"(same as a 0%-replay run on {len(task_data)} task rows)")
+
     # Split each example into PROMPT (what the model reads) and COMPLETION (what it
     # must learn to produce). The prompt ends exactly at "### Response:\n"; the answer
     # is the completion. With completion_only_loss=True (below), trl masks the prompt
@@ -164,6 +177,7 @@ def run_experiment(quant_bits: int, replay_ratio: float, task: str,
             gradient_accumulation_steps=grad_accum,
             warmup_steps=50,
             num_train_epochs=epochs,
+            max_steps=max_steps,
             learning_rate=LR,
             fp16=not torch.cuda.is_bf16_supported(),
             bf16=torch.cuda.is_bf16_supported(),
@@ -213,8 +227,11 @@ if __name__ == "__main__":
     parser.add_argument("--replay_source", type=str, default="alpaca",
                         choices=["alpaca", "dolly"],
                         help="Replay buffer source (Phase 8 ablation: alpaca vs dolly).")
+    parser.add_argument("--fixed_budget", action="store_true",
+                        help="Cap optimizer steps at a 0%%-replay run's count (fixed-steps control).")
     args = parser.parse_args()
     run_experiment(args.quant, args.replay, args.task,
                    max_samples=args.max_samples, epochs=args.epochs,
                    batch_size=args.batch_size, grad_accum=args.grad_accum,
-                   seed=args.seed, replay_source=args.replay_source)
+                   seed=args.seed, replay_source=args.replay_source,
+                   fixed_budget=args.fixed_budget)
