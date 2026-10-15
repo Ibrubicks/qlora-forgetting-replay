@@ -1,0 +1,11 @@
+{
+  "run": "llama3b_4bit_replay0pct_xsum_seed777",
+  "quant_bits": 4,
+  "mode": "finetuned",
+  "mmlu": 53.86,
+  "hellaswag": 65.4,
+  "winogrande": 68.8,
+  "arc_easy": 76.2,
+  "avg_general": 66.06,
+  "forgetting_score": 3.79
+}

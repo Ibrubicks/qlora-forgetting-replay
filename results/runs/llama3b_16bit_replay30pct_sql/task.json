@@ -1,0 +1,10 @@
+{
+  "run": "llama3b_16bit_replay30pct_sql",
+  "task": "sql",
+  "quant_bits": 16,
+  "n_eval": 100,
+  "accuracy": "",
+  "macro_f1": "",
+  "rougeL": "",
+  "exact_match": 92.0
+}

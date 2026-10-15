@@ -1,0 +1,11 @@
+{
+  "run": "llama3b_8bit_replay30pct_sql",
+  "quant_bits": 8,
+  "mode": "finetuned",
+  "mmlu": 56.12,
+  "hellaswag": 65.1,
+  "winogrande": 68.3,
+  "arc_easy": 73.5,
+  "avg_general": 65.76,
+  "forgetting_score": 2.74
+}
