@@ -20,6 +20,11 @@ for r in A:
     if r["mode"] == "finetuned" and m:
         FS[(m[3], int(m[1]), int(m[2]))] = float(r["forgetting_score"])
 OUT = "figs/"
+plt.rcParams["pdf.fonttype"] = 42
+def save(fig, name):
+    fig.savefig(OUT + name + ".png", bbox_inches="tight", dpi=600)
+    fig.savefig(OUT + name + ".pdf", bbox_inches="tight")
+
 import os; os.makedirs(OUT, exist_ok=True)
 R = [0, 10, 20, 30]
 
@@ -37,7 +42,7 @@ axs[0].set_ylabel("Forgetting Score (%)")
 h, l = axs[0].get_legend_handles_labels()
 h.append(plt.Line2D([], [], marker="D", ls="", mfc="white", mec="gray")); l.append("second seed")
 fig.legend(h, l, loc="lower center", ncol=4, frameon=False, fontsize=8, bbox_to_anchor=(0.5, -0.04))
-fig.tight_layout(rect=(0, 0.08, 1, 1)); fig.savefig(OUT + "fig1_curves.png", bbox_inches="tight"); plt.close(fig)
+fig.tight_layout(rect=(0, 0.08, 1, 1)); save(fig, "fig1_curves"); plt.close(fig)
 
 # Fig 2: additive effects forest
 S = json.load(open("stats.json"))["samsum_xsum"]["coef"]
@@ -50,7 +55,7 @@ for i, (k, lab) in enumerate(names[::-1]):
 ax.set_yticks(range(5)); ax.set_yticklabels([n[1] for n in names[::-1]])
 ax.axvline(0, color="black", lw=0.8); ax.set_xlabel("Change in Forgetting Score (points), 95% CI")
 ax.grid(axis="y", alpha=0)
-fig.tight_layout(); fig.savefig(OUT + "fig2_effects.png", bbox_inches="tight"); plt.close(fig)
+fig.tight_layout(); save(fig, "fig2_effects"); plt.close(fig)
 
 # Fig 3: fixed steps and Dolly (XSum 4-bit)
 fig, axs = plt.subplots(1, 2, figsize=(7.0, 2.6))
@@ -64,7 +69,7 @@ axs[1].plot([0, 10, 20, 30], [4.13, 3.34, 2.38, 2.47], marker="o", color="#B3412
 axs[1].plot([0, 10, 20], [4.13, 2.97, 2.50], marker="s", color="#2E7D5B", label="Dolly replay")
 axs[1].set_xticks(R); axs[1].set_xlabel("Replay ratio (%)"); axs[1].set_title("Replay source (XSum, 4-bit)", fontsize=9)
 axs[1].legend(frameon=False, fontsize=7.5)
-fig.tight_layout(); fig.savefig(OUT + "fig3_controls.png", bbox_inches="tight"); plt.close(fig)
+fig.tight_layout(); save(fig, "fig3_controls"); plt.close(fig)
 
 # Fig 4: benchmark change after fine-tuning
 d = {k: [] for k in ("mmlu", "hellaswag", "winogrande", "arc_easy")}
@@ -78,7 +83,7 @@ data = [d[k] for k in ("mmlu", "hellaswag", "winogrande", "arc_easy")]
 bp = ax.boxplot(data, widths=0.5, patch_artist=True, medianprops=dict(color="black"))
 for p, c in zip(bp["boxes"], ["#B3412B", "#B0B7C3", "#B0B7C3", "#1F3A5F"]): p.set_facecolor(c); p.set_alpha(0.8)
 ax.axhline(0, color="black", lw=0.8); ax.set_xticklabels(labs); ax.set_ylabel("Score change vs. baseline (points)")
-fig.tight_layout(); fig.savefig(OUT + "fig4_benchmarks.png", bbox_inches="tight"); plt.close(fig)
+fig.tight_layout(); save(fig, "fig4_benchmarks"); plt.close(fig)
 print({k: (round(float(np.mean(v)), 2), sum(x > 0 for x in v), len(v)) for k, v in d.items()})
 
 # Fig 5: task score vs forgetting
@@ -91,4 +96,4 @@ for run, r in ALL.items():
 ax.set_xlabel("Task ROUGE-L"); ax.set_ylabel("Forgetting Score (%)")
 hs = [plt.Line2D([], [], marker="o", ls="", color=COL[q]) for q in (4, 8, 16)] + [plt.Line2D([], [], marker="o", ls="", color="gray"), plt.Line2D([], [], marker="s", ls="", color="gray")]
 ax.legend(hs, ["4-bit", "8-bit", "16-bit", "Samsum", "XSum"], frameon=False, fontsize=7, ncol=2)
-fig.tight_layout(); fig.savefig(OUT + "fig5_tradeoff.png", bbox_inches="tight"); plt.close(fig)
+fig.tight_layout(); save(fig, "fig5_tradeoff"); plt.close(fig)
